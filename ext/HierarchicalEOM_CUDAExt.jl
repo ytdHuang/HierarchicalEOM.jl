@@ -7,7 +7,7 @@ import CUDA
 import CUDA: cu, CuArray
 import CUDA.CUSPARSE: CuSparseVector, CuSparseMatrixCSC
 import SparseArrays: sparse, SparseVector, SparseMatrixCSC
-import SciMLOperators: MatrixOperator, ScaledOperator, AddedOperator
+import SciMLOperators: ScalarOperator, MatrixOperator, ScaledOperator, AddedOperator
 
 @doc raw"""
     cu(M::AbstractHEOMLSMatrix)
@@ -60,8 +60,9 @@ function _convert_to_gpu_matrix(A::AbstractSparseMatrix)
         return CuSparseMatrixCSC{ComplexF32,Int32}(colptr, rowval, nzval, size(A))
     end
 end
+_convert_to_gpu_matrix(A::ScalarOperator) = ScalarOperator(ComplexF32(A.val), A.update_func)
 _convert_to_gpu_matrix(A::MatrixOperator) = MatrixOperator(_convert_to_gpu_matrix(A.A))
-_convert_to_gpu_matrix(A::ScaledOperator) = ScaledOperator(A.λ, _convert_to_gpu_matrix(A.L))
+_convert_to_gpu_matrix(A::ScaledOperator) = ScaledOperator(_convert_to_gpu_matrix(A.λ), _convert_to_gpu_matrix(A.L))
 _convert_to_gpu_matrix(A::AddedOperator) = AddedOperator(map(op -> _convert_to_gpu_matrix(op), A.ops))
 
 # change the type of `ADOs` to match the type of HEOMLS matrix
