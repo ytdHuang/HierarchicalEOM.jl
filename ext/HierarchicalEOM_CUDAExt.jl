@@ -75,7 +75,8 @@ function _convert_to_gpu_matrix(A::AbstractSparseMatrix, ElType::Type{T}) where 
 end
 _convert_to_gpu_matrix(A::ScalarOperator, ElType) = ScalarOperator(ElType(A.val), A.update_func)
 _convert_to_gpu_matrix(A::MatrixOperator, ElType) = MatrixOperator(_convert_to_gpu_matrix(A.A, ElType))
-_convert_to_gpu_matrix(A::ScaledOperator, ElType) = ScaledOperator(_convert_to_gpu_matrix(A.λ, ElType), _convert_to_gpu_matrix(A.L, ElType))
+_convert_to_gpu_matrix(A::ScaledOperator, ElType) =
+    ScaledOperator(_convert_to_gpu_matrix(A.λ, ElType), _convert_to_gpu_matrix(A.L, ElType))
 _convert_to_gpu_matrix(A::AddedOperator, ElType) = AddedOperator(map(op -> _convert_to_gpu_matrix(op, ElType), A.ops))
 
 # change the type of `ADOs` to match the type of HEOMLS matrix
