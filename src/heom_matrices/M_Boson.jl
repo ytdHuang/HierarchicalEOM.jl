@@ -97,19 +97,21 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     L_row = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
     L_col = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
     L_val = Dict{ScalarOperator,Vector{Vector{ComplexF64}}}(λ0 => Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread])
+    chnls = Dict{ScalarOperator,Channel}(λ0 => Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread))
+    foreach(i -> put!(chnls[λ0], (L_row[λ0][i], L_col[λ0][i], L_val[λ0][i])), 1:Nthread)
     for λ in td_scalars
         L_row[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
         L_col[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
         L_val[λ] = Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread]
+        chnls[λ] = Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread)
+        foreach(i -> put!(chnls[λ], (L_row[λ][i], L_col[λ][i], L_val[λ][i])), 1:Nthread)
     end
-
     if verbose
         println("Preparing block matrices for HEOM Liouvillian superoperator (using $(Nthread) threads)...")
         flush(stdout)
         prog = ProgressBar(Nado)
     end
     @threads for idx in 1:Nado
-        tID = threadid()
 
         # boson (current level) superoperator
         nvec = idx2nvec[idx]
@@ -119,7 +121,10 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         else
             op = Lsys
         end
-        add_operator!(op, L_row[λ0][tID], L_col[λ0][tID], L_val[λ0][tID], Nado, idx, idx)
+
+        L_tuple = take!(chnls[λ0])
+        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx)
+        put!(chnls[λ0], L_tuple)
 
         # connect to bosonic (n+1)th- & (n-1)th- level superoperator
         mode = 0
@@ -135,12 +140,15 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                     if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
                         op = minus_i_D_op(bB, k, n_k)
+
                         if bB isa AbstractBosonFunctionField
                             λ = bB.η[k]
                         else
                             λ = λ0
                         end
-                        add_operator!(op, L_row[λ][tID], L_col[λ][tID], L_val[λ][tID], Nado, idx, idx_neigh)
+                        L_tuple = take!(chnls[λ])
+                        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
+                        put!(chnls[λ], L_tuple)
                     end
                     Nvec_plus!(nvec_neigh, mode)
                 end
@@ -151,7 +159,10 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                     if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
                         op = minus_i_B_op(bB)
-                        add_operator!(op, L_row[λ0][tID], L_col[λ0][tID], L_val[λ0][tID], Nado, idx, idx_neigh)
+
+                        L_tuple = take!(chnls[λ0])
+                        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
+                        put!(chnls[λ0], L_tuple)
                     end
                     Nvec_minus!(nvec_neigh, mode)
                 end
