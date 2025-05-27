@@ -75,6 +75,7 @@ include("evolution.jl")
 include("steadystate.jl")
 include("power_spectrum.jl")
 include("density_of_states.jl")
+include("correlations.jl")
 
 # deprecated functions
 include("deprecated.jl")
