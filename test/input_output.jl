@@ -1,4 +1,4 @@
-@time @testset "Input-Output" begin
+@testitem "Input-Output" begin
     tier = 12
     Δ = 2 * π
     Γ = 0.1 * Δ
