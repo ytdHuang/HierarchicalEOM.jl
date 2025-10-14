@@ -22,11 +22,32 @@ import QuantumToolbox:
     dimensions_to_dims,
     _save_func,
     _merge_saveat,
+    _merge_kwargs_with_callback,
+    _get_expvals,
+    _se_me_map_prob_func,
+    _standard_output_func,
+    _ensemble_dispatch_output_func,
+    _ensemble_dispatch_solve,
+    makeVal,
+    getVal,
+    TimeEvolutionProblem,
+    AbstractSaveFunc,
     DEFAULT_ODE_SOLVER_OPTIONS,
     SteadyStateODECondition
 
 # SciML packages (for OrdinaryDiffEq and LinearSolve)
-import SciMLBase: init, solve, solve!, u_modified!, ODEProblem, FullSpecialize, CallbackSet, NullParameters
+import SciMLBase:
+    init,
+    solve,
+    solve!,
+    u_modified!,
+    ODEProblem,
+    EnsembleProblem,
+    EnsembleAlgorithm,
+    EnsembleThreads,
+    FullSpecialize,
+    CallbackSet,
+    NullParameters
 import SciMLOperators:
     AbstractSciMLOperator,
     ScalarOperator,
@@ -44,7 +65,6 @@ import LinearSolve: LinearProblem, SciMLLinearSolveAlgorithm, KrylovJL_GMRES
 import Base.Threads: @threads, nthreads, Channel
 import FastExpm: fastExpm
 import IncompleteLU: ilu
-import JLD2: jldopen
 import Pkg
 
 # Basic functions

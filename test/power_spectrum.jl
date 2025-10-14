@@ -21,7 +21,7 @@
         rm("PSD.txt")
     end
     psd1 = PowerSpectrum(L, ados_s, a, ωlist; verbose = false, filename = "PSD")
-    psd2 = [ # result with solver = UMFPACKFactorization()
+    psd2 = [ # result with alg = UMFPACKFactorization()
         0.0008880366931592341,
         0.0010614535356223845,
         0.001300813127188815,
@@ -60,15 +60,19 @@
     @test_throws ErrorException PowerSpectrum(L, ADOs(zeros(8), 2), a, ωlist; verbose = false)
     @test_throws ErrorException PowerSpectrum(L, ADOs(zeros(32), 2), a, ωlist; verbose = false)
 
+    # deprecated kwargs
+    import LinearSolve # when removing this, remember to also remove LinearSolve in test/Project.toml
+    @test_throws ErrorException PowerSpectrum(L, ados_s, a, ωlist; solver = LinearSolve.KrylovJL_GMRES())
+
     # remove all the temporary files
     rm("PSD.txt")
 
     # two time correlation functions
     tlist = 0:0.1:1000
-    corr1 = correlation_2op_1t(L, ados_s, tlist, a', a; verbose = false)
-    corr2 = correlation_3op_2t(L, ados_s, [0], tlist, qeye(2), a', a; verbose = false)
-    corr3 = correlation_3op_1t(L, ados_s, tlist, a', a, qeye(2), verbose = false)
-    corr4 = correlation_2op_2t(L, ados_s, [0], tlist, a', a, reverse = true, verbose = false)
+    corr1 = correlation_2op_1t(L, ados_s, tlist, a', a; progress_bar = Val(false))
+    corr2 = correlation_3op_2t(L, ados_s, [0], tlist, qeye(2), a', a; progress_bar = Val(false))
+    corr3 = correlation_3op_1t(L, ados_s, tlist, a', a, qeye(2), progress_bar = Val(false))
+    corr4 = correlation_2op_2t(L, ados_s, [0], tlist, a', a, reverse = true, progress_bar = Val(false))
 
     @test corr1 == corr2[1, :]
     @test corr3 == corr4[1, :]
