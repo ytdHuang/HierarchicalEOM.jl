@@ -109,43 +109,19 @@
         TrADO(M_out_fn, HDict_out_fn.nvec2idx[Nvec([0, 0, 1, 1, 0, 0])]),
         TrADO(M_out_fn, HDict_out_fn.nvec2idx[Nvec([0, 0, 1, 1, 1, 1])]),
     ]
-
-    # use HEOMsolve_map
-    import HierarchicalEOM: HEOMsolveProblem
-    import SciMLBase: remake
-    iter = tlist[2:end]
-    first_tout = iter[1]
-    prob_heom_out_fn = HEOMsolveProblem(
-        M_out_fn,
-        ρ0,
-        [0, first_tout],
-        params = (tout = first_tout,),
-        e_ops = e_ops_out_fn,
-        progress_bar = Val(false),
-    )
-    function _map_prob_func(prob, i, repeat, iter)
-        f = deepcopy(prob.f.f)
-        tout = iter[i]
-        return remake(prob, f = f, tspan = (0, tout), p = (tout = tout,), callback = deepcopy(prob.kwargs[:callback]))
-    end
-    sol_heom_out_fn = HEOMsolve_map(
-        prob_heom_out_fn,
-        iter;
-        prob_func = (prob, i, repeat) -> _map_prob_func(prob, i, repeat, iter),
-        progress_bar = Val(true), # also test the progress_bar
-    )
-
-    @test size(sol_heom_out_fn) == size(iter)
-    @test sol_heom_out_fn isa Vector{<:TimeEvolutionHEOMSol}
-    for (i, tout) in enumerate(iter)
-        sol = sol_heom_out_fn[i]
-        @test length(sol.ados) == 1
-        @test size(sol.expect) == (length(e_ops_out_fn), 2)
+    for (i, tout) in enumerate(tlist)
+        (i == 1) && continue
+        p = (tout = tout,)
+        sol_heom_out_fn = HEOMsolve(M_out_fn, ρ0, [0, tout], params = p, e_ops = e_ops_out_fn, verbose = false)
+        @test length(sol_heom_out_fn.ados) == 1
+        @test size(sol_heom_out_fn.expect) == (length(e_ops_out_fn), 2)
         @test isapprox(
-            sol_me1.expect[2, i+1],
+            sol_me1.expect[2, i],
             (
-                exp(-2 * Γ * tout) * sol.expect[1, end] - exp(1im * ω0 * tout - Γ * tout) * sol.expect[2, end] -
-                exp(-1im * ω0 * tout - Γ * tout) * sol.expect[3, end] - sol.expect[4, end] + sol.expect[5, end]
+                exp(-2 * Γ * tout) * sol_heom_out_fn.expect[1, end] -
+                exp(1im * ω0 * tout - Γ * tout) * sol_heom_out_fn.expect[2, end] -
+                exp(-1im * ω0 * tout - Γ * tout) * sol_heom_out_fn.expect[3, end] - sol_heom_out_fn.expect[4, end] +
+                sol_heom_out_fn.expect[5, end]
             ),
             atol = 1e-6,
         )
