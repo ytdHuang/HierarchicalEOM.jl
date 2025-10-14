@@ -129,7 +129,7 @@
         return remake(prob, f = f, tspan = (0, tout), p = (tout = tout,), callback = deepcopy(prob.kwargs[:callback]))
     end
     sol_heom_out_fn = HEOMsolve_map(
-        prob,
+        prob_heom_out_fn,
         iter;
         prob_func = (prob, i, repeat) -> _map_prob_func(prob, i, repeat, iter),
         progress_bar = Val(true), # also test the progress_bar
