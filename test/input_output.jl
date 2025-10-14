@@ -114,8 +114,15 @@
     import HierarchicalEOM: HEOMsolveProblem
     import SciMLBase: remake
     iter = tlist[2:end]
-    prob_heom_out_fn =
-        HEOMsolveProblem(M_out_fn, ρ0, [0, iter[1]], params = p, e_ops = e_ops_out_fn, progress_bar = Val(false))
+    first_tout = iter[1]
+    prob_heom_out_fn = HEOMsolveProblem(
+        M_out_fn,
+        ρ0,
+        [0, first_tout],
+        params = (tout = first_tout,),
+        e_ops = e_ops_out_fn,
+        progress_bar = Val(false),
+    )
     function _map_prob_func(prob, i, repeat, iter)
         f = deepcopy(prob.f.f)
         tout = iter[i]
