@@ -58,7 +58,7 @@
     HDict_in = M_in.hierarchy
     e_ops_in =
         [TrADO(M_in; e_op = Y), TrADO(M_in; e_op = Y) - TrADO(M_in, HDict_in.nvec2idx[Nvec([0, 0, 1, 1])]; e_op = Y)]
-    sol_heom_in = HEOMsolve(M_in, ρ0, tlist, e_ops = e_ops_in, verbose = false)
+    sol_heom_in = HEOMsolve(M_in, ρ0, tlist, e_ops = e_ops_in, progress_bar = Val(false))
     @test length(sol_heom_in.ados) == 1
     @test size(sol_heom_in.expect) == (length(e_ops_in), Ntime)
     @test all(isapprox.(sol_heom_in.expect[1, :], sol_me0.expect[1, :], atol = 1e-6))
@@ -69,7 +69,7 @@
     M_out = M_Boson(Hsys, tier, bath_list_out, verbose = false)
     HDict_out = M_out.hierarchy
     e_ops_out = [-TrADO(M_out, HDict_out.nvec2idx[Nvec([0, 0, 1, 1, 0, 0])])]
-    sol_heom_out = HEOMsolve(M_out, ρ0, tlist, e_ops = e_ops_out, verbose = false)
+    sol_heom_out = HEOMsolve(M_out, ρ0, tlist, e_ops = e_ops_out, progress_bar = Val(false))
     @test length(sol_heom_out.ados) == 1
     @test size(sol_heom_out.expect) == (length(e_ops_out), Ntime)
     @test all(isapprox.(sol_heom_out.expect[1, :], sol_me0.expect[2, :], atol = 1e-6))
@@ -82,7 +82,7 @@
         TrADO(M_out, HDict_out.nvec2idx[Nvec([0, 0, 1, 1, 0, 0])]),
         TrADO(M_out, HDict_out.nvec2idx[Nvec([0, 0, 1, 1, 1, 1])]),
     ]
-    sol_heom_out_in = HEOMsolve(M_out, ρ0, tlist, e_ops = e_ops_out_in, verbose = false)
+    sol_heom_out_in = HEOMsolve(M_out, ρ0, tlist, e_ops = e_ops_out_in, progress_bar = Val(false))
     @test length(sol_heom_out.ados) == 1
     @test size(sol_heom_out_in.expect) == (length(e_ops_out_in), Ntime)
     for (i, t) in enumerate(tlist)
@@ -109,19 +109,36 @@
         TrADO(M_out_fn, HDict_out_fn.nvec2idx[Nvec([0, 0, 1, 1, 0, 0])]),
         TrADO(M_out_fn, HDict_out_fn.nvec2idx[Nvec([0, 0, 1, 1, 1, 1])]),
     ]
-    for (i, tout) in enumerate(tlist)
-        (i == 1) && continue
-        p = (tout = tout,)
-        sol_heom_out_fn = HEOMsolve(M_out_fn, ρ0, [0, tout], params = p, e_ops = e_ops_out_fn, verbose = false)
-        @test length(sol_heom_out_fn.ados) == 1
-        @test size(sol_heom_out_fn.expect) == (length(e_ops_out_fn), 2)
+
+    # use HEOMsolve_map
+    import HierarchicalEOM: HEOMsolveProblem
+    import SciMLBase: remake
+    iter = tlist[2:end]
+    prob_heom_out_fn =
+        HEOMsolveProblem(M_out_fn, ρ0, [0, iter[1]], params = p, e_ops = e_ops_out_fn, progress_bar = Val(false))
+    function _map_prob_func(prob, i, repeat, iter)
+        f = deepcopy(prob.f.f)
+        tout = iter[i]
+        return remake(prob, f = f, tspan = (0, tout), p = (tout = tout,), callback = deepcopy(prob.kwargs[:callback]))
+    end
+    sol_heom_out_fn = HEOMsolve_map(
+        prob,
+        iter;
+        prob_func = (prob, i, repeat) -> _map_prob_func(prob, i, repeat, iter),
+        progress_bar = Val(true), # also test the progress_bar
+    )
+
+    @test size(sol_heom_out_fn) == size(iter)
+    @test sol_heom_out_fn isa Vector{<:TimeEvolutionHEOMSol}
+    for (i, tout) in enumerate(iter)
+        sol = sol_heom_out_fn[i]
+        @test length(sol.ados) == 1
+        @test size(sol.expect) == (length(e_ops_out_fn), 2)
         @test isapprox(
-            sol_me1.expect[2, i],
+            sol_me1.expect[2, i+1],
             (
-                exp(-2 * Γ * tout) * sol_heom_out_fn.expect[1, end] -
-                exp(1im * ω0 * tout - Γ * tout) * sol_heom_out_fn.expect[2, end] -
-                exp(-1im * ω0 * tout - Γ * tout) * sol_heom_out_fn.expect[3, end] - sol_heom_out_fn.expect[4, end] +
-                sol_heom_out_fn.expect[5, end]
+                exp(-2 * Γ * tout) * sol.expect[1, end] - exp(1im * ω0 * tout - Γ * tout) * sol.expect[2, end] -
+                exp(-1im * ω0 * tout - Γ * tout) * sol.expect[3, end] - sol.expect[4, end] + sol.expect[5, end]
             ),
             atol = 1e-6,
         )
