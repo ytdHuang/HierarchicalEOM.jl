@@ -111,7 +111,7 @@
     ]
 
     # use HEOMsolve_map
-    import HierarchicalEOM: HEOMsolveProblem, SaveFuncHEOMSolve, _generate_Eops
+    import HierarchicalEOM: SaveFuncHEOMSolve, _generate_Eops
     import SciMLBase: remake
     import DiffEqCallbacks: FunctionCallingCallback
     iter = tlist[2:end]
@@ -121,7 +121,7 @@
         f = deepcopy(prob.f.f)
         tout = iter[i]
 
-        tr_e_ops = _generate_Eops(M_out_fn, e_ops_out_fn, nothing, nothing)
+        tr_e_ops = _generate_Eops(M_out_fn, e_ops_out_fn)
         expvals = Array{ComplexF64}(undef, length(e_ops_out_fn), 1)
 
         _save_func = SaveFuncHEOMSolve(tr_e_ops, nothing, Ref(1), expvals)
