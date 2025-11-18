@@ -73,8 +73,7 @@ struct bosonInputFunction <: AbstractBosonFunctionField
 
         Nterm = length(_η)
         γ = zeros(Nterm)
-        Id_cache = I(size(_op, 1))
-        return new(_spre(_op.data, Id_cache) - _spost(_op.data, Id_cache), _op.dimensions, _η, γ, Nterm)
+        return new(_spre(_op.data) - _spost(_op.data), _op.dimensions, _η, γ, Nterm)
     end
 end
 bosonInputFunction(op::QuantumObject, η::Function) = bosonInputFunction(op, Function[η])
@@ -92,8 +91,7 @@ struct bosonOutputLeft <: AbstractBosonDynamicalField
         N_exp_term = length(η)
         (N_exp_term == length(γ)) || error("The length of \'η\' and \'γ\' should be the same.")
 
-        Id_cache = I(size(_op, 1))
-        return new(_spre(_op.data, Id_cache), _op.dimensions, η, γ, N_exp_term)
+        return new(_spre(_op.data), _op.dimensions, η, γ, N_exp_term)
     end
 end
 
@@ -110,8 +108,7 @@ struct bosonOutputRight <: AbstractBosonDynamicalField
         N_exp_term = length(η)
         (N_exp_term == length(γ)) || error("The length of \'η\' and \'γ\' should be the same.")
 
-        Id_cache = I(size(_op, 1))
-        return new(_spost(_op.data, Id_cache), _op.dimensions, η, γ, N_exp_term)
+        return new(_spost(_op.data), _op.dimensions, η, γ, N_exp_term)
     end
 end
 
@@ -128,8 +125,7 @@ struct bosonOutputFunctionLeft <: AbstractBosonFunctionField
 
         Nterm = length(_η)
         γ = zeros(Nterm)
-        Id_cache = I(size(_op, 1))
-        return new(_spre(_op.data, Id_cache), _op.dimensions, _η, γ, Nterm)
+        return new(_spre(_op.data), _op.dimensions, _η, γ, Nterm)
     end
 end
 bosonOutputFunctionLeft(op::QuantumObject, η::Function) = bosonOutputFunctionLeft(op, Function[η])
@@ -147,8 +143,7 @@ struct bosonOutputFunctionRight <: AbstractBosonFunctionField
 
         Nterm = length(_η)
         γ = zeros(Nterm)
-        Id_cache = I(size(_op, 1))
-        return new(_spost(_op.data, Id_cache), _op.dimensions, _η, γ, Nterm)
+        return new(_spost(_op.data), _op.dimensions, _η, γ, Nterm)
     end
 end
 bosonOutputFunctionRight(op::QuantumObject, η::Function) = bosonOutputFunctionRight(op, Function[η])
