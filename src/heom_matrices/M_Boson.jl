@@ -85,13 +85,27 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         flush(stdout)
     end
 
+    # time dependent scalar operators
+    td_scalars = ScalarOperator[]
+    for b in baths
+        (b isa AbstractBosonFunctionField) && append!(td_scalars, b.η)
+    end
+
     # start to construct the matrix
     Nthread = nthreads()
-    L_row = [Int[] for _ in 1:Nthread]
-    L_col = [Int[] for _ in 1:Nthread]
-    L_val = [ComplexF64[] for _ in 1:Nthread]
-    chnl = Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread)
-    foreach(i -> put!(chnl, (L_row[i], L_col[i], L_val[i])), 1:Nthread)
+    λ0 = ScalarOperator(0) # this is just a key for conventional (time-independent) HEOMLS
+    L_row = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
+    L_col = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
+    L_val = Dict{ScalarOperator,Vector{Vector{ComplexF64}}}(λ0 => Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread])
+    chnls = Dict{ScalarOperator,Channel}(λ0 => Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread))
+    foreach(i -> put!(chnls[λ0], (L_row[λ0][i], L_col[λ0][i], L_val[λ0][i])), 1:Nthread)
+    for λ in td_scalars
+        L_row[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
+        L_col[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
+        L_val[λ] = Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread]
+        chnls[λ] = Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread)
+        foreach(i -> put!(chnls[λ], (L_row[λ][i], L_col[λ][i], L_val[λ][i])), 1:Nthread)
+    end
     if verbose
         println("Preparing block matrices for HEOM Liouvillian superoperator (using $(Nthread) threads)...")
         flush(stdout)
@@ -107,9 +121,10 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         else
             op = Lsys
         end
-        L_tuple = take!(chnl)
+
+        L_tuple = take!(chnls[λ0])
         add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx)
-        put!(chnl, L_tuple)
+        put!(chnls[λ0], L_tuple)
 
         # connect to bosonic (n+1)th- & (n-1)th- level superoperator
         mode = 0
@@ -122,12 +137,18 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                 # connect to bosonic (n-1)th-level superoperator
                 if n_k > 0
                     Nvec_minus!(nvec_neigh, mode)
-                    if (threshold == 0.0) || haskey(nvec2idx, nvec_neigh)
+                    if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
                         op = minus_i_D_op(bB, k, n_k)
-                        L_tuple = take!(chnl)
+
+                        if bB isa AbstractBosonFunctionField
+                            λ = bB.η[k]
+                        else
+                            λ = λ0
+                        end
+                        L_tuple = take!(chnls[λ])
                         add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
-                        put!(chnl, L_tuple)
+                        put!(chnls[λ], L_tuple)
                     end
                     Nvec_plus!(nvec_neigh, mode)
                 end
@@ -135,12 +156,13 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                 # connect to bosonic (n+1)th-level superoperator
                 if nvec.level < tier
                     Nvec_plus!(nvec_neigh, mode)
-                    if (threshold == 0.0) || haskey(nvec2idx, nvec_neigh)
+                    if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
                         op = minus_i_B_op(bB)
-                        L_tuple = take!(chnl)
+
+                        L_tuple = take!(chnls[λ0])
                         add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
-                        put!(chnl, L_tuple)
+                        put!(chnls[λ0], L_tuple)
                     end
                     Nvec_minus!(nvec_neigh, mode)
                 end
@@ -148,13 +170,41 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         end
         verbose && next!(progr) # trigger a progress bar update
     end
+
     if verbose
         print("Constructing matrix...")
         flush(stdout)
     end
+
+    # conventional HEOMLS (time independent)
     L_he = MatrixOperator(
-        sparse(reduce(vcat, L_row), reduce(vcat, L_col), reduce(vcat, L_val), Nado * sup_dim, Nado * sup_dim),
+        sparse(
+            reduce(vcat, L_row[λ0]),
+            reduce(vcat, L_col[λ0]),
+            reduce(vcat, L_val[λ0]),
+            Nado * sup_dim,
+            Nado * sup_dim,
+        ),
     )
+
+    # Input/Output HEOMLS (time dependent)
+    if !isempty(td_scalars)
+        L_he += mapreduce(
+            λ ->
+                λ * MatrixOperator(
+                    sparse(
+                        reduce(vcat, L_row[λ]),
+                        reduce(vcat, L_col[λ]),
+                        reduce(vcat, L_val[λ]),
+                        Nado * sup_dim,
+                        Nado * sup_dim,
+                    ),
+                ),
+            +,
+            td_scalars,
+        )
+    end
+
     if verbose
         println("[DONE]")
         flush(stdout)
