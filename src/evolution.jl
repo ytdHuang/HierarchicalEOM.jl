@@ -345,7 +345,7 @@ function _generate_Eops(M::AbstractHEOMLSMatrix, e_ops)
     ]
     return tr_e_ops
 end
-_generate_Eops(M::AbstractHEOMLSMatrix, e_ops::AbstractVector{T}, Id_sys, Id_HEOM) where {T<:ADOs} =
+_generate_Eops(M::AbstractHEOMLSMatrix, e_ops::AbstractVector{T}) where {T<:ADOs} =
     [_HandleTraceVectorType(M, ados.data) for ados in e_ops]
 
 struct SaveFuncHEOMSolve{TE,PT<:Union{Nothing,Progress},IT,TEXPV<:Union{Nothing,AbstractMatrix}} <: AbstractSaveFunc
