@@ -34,9 +34,10 @@ function M_Boson(
     Bath::BosonBath,
     parity::AbstractParity = EVEN;
     threshold::Real = 0.0,
+    assemble::Union{Val,Symbol} = Val(:full),
     verbose::Bool = true,
 )
-    return M_Boson(Hsys, tier, [Bath], parity, threshold = threshold, verbose = verbose)
+    return M_Boson(Hsys, tier, [Bath], parity; threshold, assemble, verbose)
 end
 
 @doc raw"""
@@ -49,6 +50,7 @@ Generate the boson-type HEOM Liouvillian superoperator matrix
 - `Bath::Vector{BosonBath}` : objects for different bosonic baths
 - `parity::AbstractParity` : the parity label of the operator which HEOMLS is acting on (usually `EVEN`, only set as `ODD` for calculating spectrum of fermionic system).
 - `threshold::Real` : The threshold of the importance value (see Ref. [1]). Defaults to `0.0`.
+- `assemble::Union{Val,Symbol}` : Methods to assemble (evaluate lazy operations) the HEOMLS. Accepted values are `:full`, `:combine`, or `:none`. Defaults to `Val(:full)`.
 - `verbose::Bool` : To display verbose output and progress bar during the process or not. Defaults to `true`.
 
 Note that the parity only need to be set as `ODD` when the system contains fermionic systems and you need to calculate the spectrum (density of states) of it.
@@ -61,23 +63,20 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     Bath::Vector{BosonBath},
     parity::AbstractParity = EVEN;
     threshold::Real = 0.0,
+    assemble::Union{Val,Symbol} = Val(:full),
     verbose::Bool = true,
 )
+    _Hsys = HandleMatrixType(Hsys, "Hsys (system Hamiltonian or Liouvillian)") # Checking input type first
 
-    # check for system dimension
-    _Hsys = HandleMatrixType(Hsys, "Hsys (system Hamiltonian or Liouvillian)")
-    sup_dim = prod(_Hsys.dimensions)^2
-    I_sup = sparse(one(ComplexF64) * I, sup_dim, sup_dim)
-
-    # the Liouvillian operator for free Hamiltonian term
-    Lsys = minus_i_L_op(_Hsys)
+    assemble_method = makeVal(assemble)
+    check_assemble_method(assemble_method)
 
     # bosonic bath
     if verbose && (threshold > 0.0)
         print("Checking the importance value for each ADOs...")
         flush(stdout)
     end
-    Nado, baths, hierarchy = genBathHierarchy(Bath, tier, _Hsys.dimensions, threshold = threshold)
+    Nado, baths, hierarchy = genBathHierarchy(Bath, tier, _Hsys.dimensions; threshold)
     idx2nvec = hierarchy.idx2nvec
     nvec2idx = hierarchy.nvec2idx
     if verbose && (threshold > 0.0)
@@ -85,51 +84,42 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         flush(stdout)
     end
 
-    # time dependent scalar operators
-    td_scalars = ScalarOperator[]
-    for b in baths
-        (b isa AbstractBosonFunctionField) && append!(td_scalars, b.η)
+    # stores position and prefix value for each Boson superoperators in HEOM Liouville space using sparse COO format
+    B_terms = HEOMSparseStructure[]
+    B_td_terms = Dict{ScalarOperator,Tuple{HEOMSparseStructure,Int}}()
+    for (b_idx, bB) in enumerate(baths)
+        if bB isa AbstractBosonFunctionField
+            # Here, we create an empty dummy structure for `B_terms` to keep the HEOM structure alignment
+            push!(B_terms, HEOMSparseStructure())
+
+            # the time-dependent terms will be handled separately
+            for λ in bB.η
+                B_td_terms[λ] = (HEOMSparseStructure(bB, Nado), b_idx)
+            end
+        else
+            push!(B_terms, HEOMSparseStructure(bB, Nado))
+        end
     end
 
     # start to construct the matrix
-    Nthread = nthreads()
-    λ0 = ScalarOperator(0) # this is just a key for conventional (time-independent) HEOMLS
-    L_row = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
-    L_col = Dict{ScalarOperator,Vector{Vector{Int}}}(λ0 => Vector{Int}[Int[] for _ in 1:Nthread])
-    L_val = Dict{ScalarOperator,Vector{Vector{ComplexF64}}}(λ0 => Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread])
-    chnls = Dict{ScalarOperator,Channel}(λ0 => Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread))
-    foreach(i -> put!(chnls[λ0], (L_row[λ0][i], L_col[λ0][i], L_val[λ0][i])), 1:Nthread)
-    for λ in td_scalars
-        L_row[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
-        L_col[λ] = Vector{Int}[Int[] for _ in 1:Nthread]
-        L_val[λ] = Vector{ComplexF64}[ComplexF64[] for _ in 1:Nthread]
-        chnls[λ] = Channel{Tuple{Vector{Int},Vector{Int},Vector{ComplexF64}}}(Nthread)
-        foreach(i -> put!(chnls[λ], (L_row[λ][i], L_col[λ][i], L_val[λ][i])), 1:Nthread)
-    end
+    minus_γ_term = zeros(ComplexF64, Nado)
+
     if verbose
-        println("Preparing block matrices for HEOM Liouvillian superoperator (using $(Nthread) threads)...")
+        println("Preparing HEOM Liouvillian sparsity structure...")
         flush(stdout)
         progr = Progress(Nado; enabled = verbose, desc = "[M_Boson] ", QuantumToolbox.settings.ProgressMeterKWARGS...)
     end
-    @threads for idx in 1:Nado
-
+    for idx in 1:Nado
         # boson (current level) superoperator
         nvec = idx2nvec[idx]
         if nvec.level >= 1
-            sum_γ = bath_sum_γ(nvec, baths)
-            op = Lsys - sum_γ * I_sup
-        else
-            op = Lsys
+            minus_γ_term[idx] = -bath_sum_γ(nvec, baths)
         end
-
-        L_tuple = take!(chnls[λ0])
-        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx)
-        put!(chnls[λ0], L_tuple)
 
         # connect to bosonic (n+1)th- & (n-1)th- level superoperator
         mode = 0
         nvec_neigh = copy(nvec)
-        for bB in baths
+        for (b_term, bB) in zip(B_terms, baths)
             for k in 1:bB.Nterm
                 mode += 1
                 n_k = nvec[mode]
@@ -139,16 +129,14 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                     Nvec_minus!(nvec_neigh, mode)
                     if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
-                        op = minus_i_D_op(bB, k, n_k)
 
                         if bB isa AbstractBosonFunctionField
+                            # find the time-dependent term in the dictionary corresponds to the ScalarOperator λ
                             λ = bB.η[k]
+                            minus_i_D_op!(B_td_terms[λ][1], idx, idx_neigh, bB, k, n_k)
                         else
-                            λ = λ0
+                            minus_i_D_op!(b_term, idx, idx_neigh, bB, k, n_k)
                         end
-                        L_tuple = take!(chnls[λ])
-                        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
-                        put!(chnls[λ], L_tuple)
                     end
                     Nvec_plus!(nvec_neigh, mode)
                 end
@@ -158,11 +146,7 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                     Nvec_plus!(nvec_neigh, mode)
                     if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
-                        op = minus_i_B_op(bB)
-
-                        L_tuple = take!(chnls[λ0])
-                        add_operator!(op, L_tuple[1], L_tuple[2], L_tuple[3], Nado, idx, idx_neigh)
-                        put!(chnls[λ0], L_tuple)
+                        minus_i_B_op!(b_term, idx, idx_neigh, bB)
                     end
                     Nvec_minus!(nvec_neigh, mode)
                 end
@@ -171,45 +155,44 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         verbose && next!(progr) # trigger a progress bar update
     end
 
-    if verbose
-        print("Constructing matrix...")
-        flush(stdout)
+    # Create SciML lazy HEOM Liouvillian superoperator
+    sup_dim = prod(_Hsys.dimensions)^2
+    L_t_indep = kron(MatrixOperator(Eye(Nado)), minus_i_L_op(_Hsys)) # the Liouvillian operator for free Hamiltonian term
+    L_t_indep += kron(MatrixOperator(spdiagm(minus_γ_term)), Eye(sup_dim)) # minus sum γ terms
+
+    # Superoperator cross level (time-independent) terms 
+    for (b_term, bB) in zip(B_terms, baths)
+        for op in fieldnames(HEOMSparseStructure)
+            b_coo = getfield(b_term, op)
+            b_coo isa Nothing && continue
+            L_t_indep += kron(MatrixOperator(sparse(b_coo)), getfield(bB, op))
+        end
     end
 
-    # conventional HEOMLS (time independent)
-    L_he = MatrixOperator(
-        sparse(
-            reduce(vcat, L_row[λ0]),
-            reduce(vcat, L_col[λ0]),
-            reduce(vcat, L_val[λ0]),
-            Nado * sup_dim,
-            Nado * sup_dim,
-        ),
-    )
+    L_terms = AbstractSciMLOperator[L_t_indep]
 
-    # Input/Output HEOMLS (time dependent)
-    if !isempty(td_scalars)
-        L_he += mapreduce(
-            λ ->
-                λ * MatrixOperator(
-                    sparse(
-                        reduce(vcat, L_row[λ]),
-                        reduce(vcat, L_col[λ]),
-                        reduce(vcat, L_val[λ]),
-                        Nado * sup_dim,
-                        Nado * sup_dim,
-                    ),
-                ),
-            +,
-            td_scalars,
-        )
+    # Input/Output HEOMLS (time-dependent) terms
+    td_scalars = keys(B_td_terms)
+    for λ in td_scalars
+        b_term, b_idx = B_td_terms[λ]
+        for op in fieldnames(HEOMSparseStructure)
+            b_coo = getfield(b_term, op)
+            b_coo isa Nothing && continue
+            push!(L_terms, kron(MatrixOperator(sparse(b_coo)), getfield(baths[b_idx], op)))
+        end
     end
 
     if verbose
         println("[DONE]")
         flush(stdout)
     end
-    return M_Boson(L_he, tier, _Hsys.dimensions, Nado, sup_dim, parity, Bath, hierarchy)
+
+    L_terms = assemble_HEOMLS_terms(L_terms, assemble_method, verbose)
+    L_heom = popfirst!(L_terms)
+    for (λ, L) in zip(td_scalars, L_terms)
+        L_heom += λ * L
+    end
+    return M_Boson(L_heom, tier, _Hsys.dimensions, Nado, sup_dim, parity, Bath, hierarchy)
 end
 
 _getBtier(M::M_Boson) = M.tier

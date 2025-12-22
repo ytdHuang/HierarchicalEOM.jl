@@ -60,6 +60,7 @@ import SciMLOperators:
     ScalarOperator,
     MatrixOperator,
     ScaledOperator,
+    TensorProductOperator,
     AddedOperator,
     update_coefficients!,
     concretize
@@ -98,6 +99,7 @@ include("heom_matrices/M_Boson_Fermion.jl")
 
 # Solvers
 include("evolution.jl")
+include("evolution_propagator.jl")
 include("steadystate.jl")
 include("power_spectrum.jl")
 include("density_of_states.jl")
