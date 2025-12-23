@@ -84,25 +84,23 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         flush(stdout)
     end
 
+    minus_γ_term = zeros(ComplexF64, Nado)
+
     # stores position and prefix value for each Boson superoperators in HEOM Liouville space using sparse COO format
     B_terms = HEOMSparseStructure[]
-    B_td_terms = Dict{ScalarOperator,Tuple{HEOMSparseStructure,Int}}()
-    for (b_idx, bB) in enumerate(baths)
+    B_td_terms = Dict{ScalarOperator,HEOMSparseStructure}()
+    for bB in baths
         if bB isa AbstractBosonFunctionField
             # Here, we create an empty dummy structure for `B_terms` to keep the HEOM structure alignment
+            # the time-dependent B_td_terms will be handled separately
             push!(B_terms, HEOMSparseStructure())
-
-            # the time-dependent terms will be handled separately
             for λ in bB.η
-                B_td_terms[λ] = (HEOMSparseStructure(bB, Nado), b_idx)
+                B_td_terms[λ] = HEOMSparseStructure(bB, Nado)
             end
         else
             push!(B_terms, HEOMSparseStructure(bB, Nado))
         end
     end
-
-    # start to construct the matrix
-    minus_γ_term = zeros(ComplexF64, Nado)
 
     if verbose
         println("Preparing HEOM Liouvillian sparsity structure...")
@@ -133,7 +131,7 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                         if bB isa AbstractBosonFunctionField
                             # find the time-dependent term in the dictionary corresponds to the ScalarOperator λ
                             λ = bB.η[k]
-                            minus_i_D_op!(B_td_terms[λ][1], idx, idx_neigh, bB, k, n_k)
+                            minus_i_D_op!(B_td_terms[λ], idx, idx_neigh, bB, k, n_k)
                         else
                             minus_i_D_op!(b_term, idx, idx_neigh, bB, k, n_k)
                         end
@@ -160,12 +158,11 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     L_t_indep = kron(MatrixOperator(Eye(Nado)), minus_i_L_op(_Hsys)) # the Liouvillian operator for free Hamiltonian term
     L_t_indep += kron(MatrixOperator(spdiagm(minus_γ_term)), Eye(sup_dim)) # minus sum γ terms
 
-    # Superoperator cross level (time-independent) terms 
-    for (b_term, bB) in zip(B_terms, baths)
-        for op in fieldnames(HEOMSparseStructure)
+    # Superoperator cross level terms
+    for b_term in B_terms
+        for op in HEOMSparseStructureFieldNames
             b_coo = getfield(b_term, op)
-            b_coo isa Nothing && continue
-            L_t_indep += kron(MatrixOperator(sparse(b_coo)), getfield(bB, op))
+            b_coo isa Nothing || (L_t_indep += _gen_HEOMLS_term(b_coo))
         end
     end
 
@@ -174,11 +171,10 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     # Input/Output HEOMLS (time-dependent) terms
     td_scalars = keys(B_td_terms)
     for λ in td_scalars
-        b_term, b_idx = B_td_terms[λ]
-        for op in fieldnames(HEOMSparseStructure)
+        b_term = B_td_terms[λ]
+        for op in HEOMSparseStructureFieldNames
             b_coo = getfield(b_term, op)
-            b_coo isa Nothing && continue
-            push!(L_terms, kron(MatrixOperator(sparse(b_coo)), getfield(baths[b_idx], op)))
+            b_coo isa Nothing || push!(L_terms, _gen_HEOMLS_term(b_coo))
         end
     end
 
@@ -189,8 +185,8 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
 
     L_terms = assemble_HEOMLS_terms(L_terms, assemble_method, verbose)
     L_heom = popfirst!(L_terms)
-    for (λ, L) in zip(td_scalars, L_terms)
-        L_heom += λ * L
+    if !isempty(td_scalars)
+        L_heom += sum(td_scalars .* L_terms)
     end
     return M_Boson(L_heom, tier, _Hsys.dimensions, Nado, sup_dim, parity, Bath, hierarchy)
 end
