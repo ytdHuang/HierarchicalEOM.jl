@@ -60,13 +60,14 @@ import SciMLOperators:
     ScalarOperator,
     MatrixOperator,
     ScaledOperator,
+    IdentityOperator,
     TensorProductOperator,
     AddedOperator,
     update_coefficients!,
     concretize
 import OrdinaryDiffEqLowOrderRK: DP5
 import DiffEqCallbacks: FunctionCallingCallback, TerminateSteadyState
-import LinearSolve: LinearProblem, SciMLLinearSolveAlgorithm, KrylovJL_GMRES
+import LinearSolve: LinearProblem, needs_concrete_A, SciMLLinearSolveAlgorithm, KrylovJL_GMRES
 
 # other dependencies (in alphabetical order)
 import FastExpm: fastExpm
