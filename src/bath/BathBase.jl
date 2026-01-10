@@ -55,7 +55,7 @@ The different types of the DynamicalField:
 """
 struct DynamicalField <: BathTerm
     op::QuantumObject
-    η::Union{Number,ScalarOperator}
+    η::Union{Number, ScalarOperator}
     γ::Number
     types::String
 end
@@ -127,6 +127,7 @@ function Base.getindex(B::AbstractBath, i::Int)
             count += b.Nterm
         end
     end
+    return nothing
 end
 
 function Base.getindex(B::AbstractBath, r::UnitRange{Int})
@@ -188,6 +189,7 @@ function Base.getindex(B::AbstractBath, r::UnitRange{Int})
             end
         end
     end
+    return nothing
 end
 
 Base.getindex(B::AbstractBath, ::Colon) = getindex(B, 1:B.Nterm)

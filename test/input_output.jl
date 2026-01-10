@@ -61,8 +61,8 @@
     sol_heom_in = HEOMsolve(M_in, ρ0, tlist, e_ops = e_ops_in, progress_bar = Val(false))
     @test length(sol_heom_in.ados) == 1
     @test size(sol_heom_in.expect) == (length(e_ops_in), Ntime)
-    @test all(isapprox.(sol_heom_in.expect[1, :], sol_me0.expect[1, :], atol = 1e-6))
-    @test all(isapprox.(sol_heom_in.expect[2, :], sol_me1.expect[1, :], atol = 1e-6))
+    @test all(isapprox.(sol_heom_in.expect[1, :], sol_me0.expect[1, :], atol = 1.0e-6))
+    @test all(isapprox.(sol_heom_in.expect[2, :], sol_me1.expect[1, :], atol = 1.0e-6))
 
     # only output
     bath_list_out = [bath, bath_output_1R, bath_output_2L, bath_input]
@@ -72,7 +72,7 @@
     sol_heom_out = HEOMsolve(M_out, ρ0, tlist, e_ops = e_ops_out, progress_bar = Val(false))
     @test length(sol_heom_out.ados) == 1
     @test size(sol_heom_out.expect) == (length(e_ops_out), Ntime)
-    @test all(isapprox.(sol_heom_out.expect[1, :], sol_me0.expect[2, :], atol = 1e-6))
+    @test all(isapprox.(sol_heom_out.expect[1, :], sol_me0.expect[2, :], atol = 1.0e-6))
 
     # output conditional on input
     e_ops_out_in = [
@@ -90,11 +90,11 @@
             sol_me1.expect[2, i],
             (
                 exp(-2 * Γ * t) * sol_heom_out_in.expect[1, i] -
-                exp(1im * ω0 * t - Γ * t) * sol_heom_out_in.expect[2, i] -
-                exp(-1im * ω0 * t - Γ * t) * sol_heom_out_in.expect[3, i] - sol_heom_out_in.expect[4, i] +
-                sol_heom_out_in.expect[5, i]
+                    exp(1im * ω0 * t - Γ * t) * sol_heom_out_in.expect[2, i] -
+                    exp(-1im * ω0 * t - Γ * t) * sol_heom_out_in.expect[3, i] - sol_heom_out_in.expect[4, i] +
+                    sol_heom_out_in.expect[5, i]
             ),
-            atol = 1e-6,
+            atol = 1.0e-6,
         )
     end
 
@@ -142,12 +142,12 @@
         @test length(sol.ados) == 1
         @test size(sol.expect) == (length(e_ops_out_fn), 1)
         @test isapprox(
-            sol_me1.expect[2, i+1],
+            sol_me1.expect[2, i + 1],
             (
                 exp(-2 * Γ * tout) * sol.expect[1, end] - exp(1im * ω0 * tout - Γ * tout) * sol.expect[2, end] -
-                exp(-1im * ω0 * tout - Γ * tout) * sol.expect[3, end] - sol.expect[4, end] + sol.expect[5, end]
+                    exp(-1im * ω0 * tout - Γ * tout) * sol.expect[3, end] - sol.expect[4, end] + sol.expect[5, end]
             ),
-            atol = 1e-6,
+            atol = 1.0e-6,
         )
     end
 end

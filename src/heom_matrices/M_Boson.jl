@@ -88,7 +88,7 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
 
     # stores position and prefix value for each Boson superoperators in HEOM Liouville space using sparse COO format
     B_terms = HEOMSparseStructure[]
-    B_td_terms = Dict{ScalarOperator,HEOMSparseStructure}()
+    B_td_terms = Dict{ScalarOperator, HEOMSparseStructure}()
     for bB in baths
         if bB isa AbstractBosonFunctionField
             # Here, we create an empty dummy structure for `B_terms` to keep the HEOM structure alignment

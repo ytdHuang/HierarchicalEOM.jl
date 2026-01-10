@@ -175,7 +175,7 @@ getADO(ados::ADOs, idx::Int) = ados[idx]
 
 Generate the equivalent trace operation on the specified index (idx) auxiliary density operator in the enlarged vectorized [`ADOs`](@ref) space.
 """
-TrADO(M::AbstractHEOMLSMatrix, idx::Int = 1; e_op::Union{Nothing,QuantumObject{Operator}} = nothing) =
+TrADO(M::AbstractHEOMLSMatrix, idx::Int = 1; e_op::Union{Nothing, QuantumObject{Operator}} = nothing) =
     TrADO(M, idx, e_op)
 TrADO(M::AbstractHEOMLSMatrix, idx::Int, ::Nothing) = ADOs(_Tr(M, idx), M.dimensions, M.N, EVEN)
 TrADO(M::AbstractHEOMLSMatrix, idx::Int, e_op::QuantumObject{Operator}) =

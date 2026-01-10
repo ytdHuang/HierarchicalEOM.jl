@@ -25,16 +25,16 @@ function _check_dynamical_field_function(ηlist::Vector{Function})
 end
 
 function BosonDynamicalField(
-    op::QuantumObject;
-    η_in = nothing,
-    η_out_L = [],
-    γ_out_L = [],
-    η_out_R = [],
-    γ_out_R = [],
-    η_out_fn_L = nothing,
-    η_out_fn_R = nothing,
-    δ::Number = 0.0,
-)
+        op::QuantumObject;
+        η_in = nothing,
+        η_out_L = [],
+        γ_out_L = [],
+        η_out_R = [],
+        γ_out_R = [],
+        η_out_fn_L = nothing,
+        η_out_fn_R = nothing,
+        δ::Number = 0.0,
+    )
     bath_list = AbstractBosonBath[]
 
     (η_in isa Nothing) || push!(bath_list, bosonInputFunction(op, η_in))
@@ -61,7 +61,7 @@ function BosonDynamicalField(
 end
 
 struct bosonInputFunction <: AbstractBosonFunctionField
-    Comm::SparseMatrixCSC{ComplexF64,Int64}
+    Comm::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     η::Vector{ScalarOperator}
     γ::AbstractVector
@@ -79,13 +79,13 @@ end
 bosonInputFunction(op::QuantumObject, η::Function) = bosonInputFunction(op, Function[η])
 
 struct bosonOutputLeft <: AbstractBosonDynamicalField
-    spre::SparseMatrixCSC{ComplexF64,Int64}
+    spre::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     η::AbstractVector
     γ::AbstractVector
     Nterm::Int
 
-    function bosonOutputLeft(op::QuantumObject, η::Vector{Ti}, γ::Vector{Tj}) where {Ti<:Number,Tj<:Number}
+    function bosonOutputLeft(op::QuantumObject, η::Vector{Ti}, γ::Vector{Tj}) where {Ti <: Number, Tj <: Number}
         _op = _check_bosonic_coupling_operator(op)
 
         N_exp_term = length(η)
@@ -96,13 +96,13 @@ struct bosonOutputLeft <: AbstractBosonDynamicalField
 end
 
 struct bosonOutputRight <: AbstractBosonDynamicalField
-    spost::SparseMatrixCSC{ComplexF64,Int64}
+    spost::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     η::AbstractVector
     γ::AbstractVector
     Nterm::Int
 
-    function bosonOutputRight(op::QuantumObject, η::Vector{Ti}, γ::Vector{Tj}) where {Ti<:Number,Tj<:Number}
+    function bosonOutputRight(op::QuantumObject, η::Vector{Ti}, γ::Vector{Tj}) where {Ti <: Number, Tj <: Number}
         _op = _check_bosonic_coupling_operator(op)
 
         N_exp_term = length(η)
@@ -113,7 +113,7 @@ struct bosonOutputRight <: AbstractBosonDynamicalField
 end
 
 struct bosonOutputFunctionLeft <: AbstractBosonFunctionField
-    spre::SparseMatrixCSC{ComplexF64,Int64}
+    spre::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     η::Vector{ScalarOperator}
     γ::AbstractVector
@@ -131,7 +131,7 @@ end
 bosonOutputFunctionLeft(op::QuantumObject, η::Function) = bosonOutputFunctionLeft(op, Function[η])
 
 struct bosonOutputFunctionRight <: AbstractBosonFunctionField
-    spost::SparseMatrixCSC{ComplexF64,Int64}
+    spost::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     η::Vector{ScalarOperator}
     γ::AbstractVector
@@ -148,7 +148,7 @@ struct bosonOutputFunctionRight <: AbstractBosonFunctionField
 end
 bosonOutputFunctionRight(op::QuantumObject, η::Function) = bosonOutputFunctionRight(op, Function[η])
 
-function Base.getproperty(b::BType, key::Symbol) where {BType<:AbstractBosonDynamicalField}
+function Base.getproperty(b::BType, key::Symbol) where {BType <: AbstractBosonDynamicalField}
     # a comment here to avoid bad render by JuliaFormatter
     if key === :dims
         return dimensions_to_dims(getfield(b, :dimensions))
