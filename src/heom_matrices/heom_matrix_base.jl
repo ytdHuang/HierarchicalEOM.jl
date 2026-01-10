@@ -16,7 +16,7 @@ General HEOM superoperator matrix.
     For a given `M::HEOMSuperOp`, `M.dims` or `getproperty(M, :dims)` returns its `dimensions` in the type of integer-vector.
 """
 struct HEOMSuperOp
-    data::SparseMatrixCSC{ComplexF64,Int64}
+    data::SparseMatrixCSC{ComplexF64, Int64}
     dimensions::Dimensions
     N::Int
     parity::AbstractParity
@@ -113,8 +113,8 @@ Returns the elements' type of the HEOM Liouvillian superoperator matrix
 """
 Base.eltype(M::AbstractHEOMLSMatrix) = eltype(M.data)
 
-Base.getindex(M::HEOMSuperOp, i::Ti, j::Tj) where {Ti,Tj<:Any} = M.data[i, j]
-Base.getindex(M::AbstractHEOMLSMatrix, i::Ti, j::Tj) where {Ti,Tj<:Any} = M.data[i, j]
+Base.getindex(M::HEOMSuperOp, i::Ti, j::Tj) where {Ti, Tj <: Any} = M.data[i, j]
+Base.getindex(M::AbstractHEOMLSMatrix, i::Ti, j::Tj) where {Ti, Tj <: Any} = M.data[i, j]
 
 function Base.show(io::IO, M::HEOMSuperOp)
     print(
@@ -202,10 +202,42 @@ function Base.:(-)(M::AbstractHEOMLSMatrix, Sup::HEOMSuperOp)
     return _reset_HEOMLS_data(M, M.data - Sup)
 end
 
-SciMLOperators.cache_operator(
-    M::AbstractHEOMLSMatrix{T},
-    cachevec::AbstractVector,
-) where {T<:SciMLOperators.AddedOperator} = _reset_HEOMLS_data(M, cache_operator(M.data, cachevec))
+# wrapping cache_operator for checking existing cache
+cache_operator_with_check(op::SciMLOperators.AbstractSciMLOperator, cachevec::AbstractVector) =
+    iscached(op) ? op : SciMLOperators.cache_operator(op, cachevec)
+
+# TensorProductOperator are the only ones that need special handling
+apply_cache(op::SciMLOperators.TensorProductOperator, tensor_cache, cachevec) =
+    TensorProductOperator(op.ops, tensor_cache)
+# ScaledOperator need to be handled recursively
+apply_cache(op::SciMLOperators.ScaledOperator, tensor_cache, cachevec) =
+    ScaledOperator(op.λ, apply_cache(op.L, tensor_cache, cachevec))
+# fallback for other AbstractSciMLOperator types
+apply_cache(op::SciMLOperators.AbstractSciMLOperator, tensor_cache, cachevec) = cache_operator_with_check(op, cachevec)
+
+function get_cached_HEOMLS_data(M::T, cachevec::AbstractVector) where {T <: SciMLOperators.AddedOperator}
+    iscached(M) && (return M)
+    ops = M.ops
+    idx = findfirst(op -> op isa TensorProductOperator, ops)
+    isnothing(idx) && (return cache_operator_with_check(M, cachevec))
+
+    first_tensor = ops[idx]
+    tensor_cache = cache_operator_with_check(first_tensor, cachevec).cache
+
+    cached_op = sum(op -> apply_cache(op, tensor_cache, cachevec), ops)
+
+    return cached_op
+end
+
+get_cached_HEOMLS_data(M::AbstractHEOMLSMatrix, cachevec::AbstractVector) = get_cached_HEOMLS_data(M.data, cachevec)
+
+get_cached_HEOMLS_data(M::T, cachevec::AbstractVector) where {T <: SciMLOperators.MatrixOperator} = M
+
+get_cached_HEOMLS_data(M::T, cachevec::AbstractVector) where {T <: SciMLOperators.AbstractSciMLOperator} =
+    cache_operator_with_check(M, cachevec)
+
+SciMLOperators.cache_operator(M::AbstractHEOMLSMatrix, cachevec::AbstractVector) =
+    _reset_HEOMLS_data(M, get_cached_HEOMLS_data(M, cachevec))
 
 @doc raw"""
     SciMLOperators.iscached(M::AbstractHEOMLSMatrix)
@@ -245,15 +277,15 @@ For more details, please refer to [`FastExpm.jl`](https://github.com/fmentink/Fa
 - `::SparseMatrixCSC{ComplexF64, Int64}` : the propagator matrix
 """
 @noinline function Propagator(
-    M::AbstractHEOMLSMatrix{<:MatrixOperator},
-    Δt::Real;
-    threshold = 1.0e-6,
-    nonzero_tol = 1.0e-14,
-)
+        M::AbstractHEOMLSMatrix{<:MatrixOperator},
+        Δt::Real;
+        threshold = 1.0e-6,
+        nonzero_tol = 1.0e-14,
+    )
     return fastExpm(M.data.A * Δt; threshold = threshold, nonzero_tol = nonzero_tol)
 end
 
-function _reset_HEOMLS_data(M::T, new_data::AbstractSciMLOperator) where {T<:AbstractHEOMLSMatrix}
+function _reset_HEOMLS_data(M::T, new_data::AbstractSciMLOperator) where {T <: AbstractHEOMLSMatrix}
     if T <: M_S
         return M_S(new_data, M.tier, M.dimensions, M.N, M.sup_dim, M.parity)
     elseif T <: M_Boson
@@ -294,7 +326,7 @@ Note that if ``V`` is acting on fermionic systems, it should be even-parity to b
 # Return 
 - `M_new::AbstractHEOMLSMatrix` : the new HEOM Liouvillian superoperator matrix
 """
-function addBosonDissipator(M::AbstractHEOMLSMatrix, jumpOP::Vector{T} = QuantumObject[]) where {T<:QuantumObject}
+function addBosonDissipator(M::AbstractHEOMLSMatrix, jumpOP::Vector{T} = QuantumObject[]) where {T <: QuantumObject}
     if length(jumpOP) > 0
         return M + HEOMSuperOp(_sum_lindblad_dissipators(jumpOP), M.parity, M)
     else
@@ -327,7 +359,7 @@ Note that the parity of the dissipator will be determined by the parity of the g
 # Return 
 - `M_new::AbstractHEOMLSMatrix` : the new HEOM Liouvillian superoperator matrix
 """
-function addFermionDissipator(M::AbstractHEOMLSMatrix, jumpOP::Vector{T} = QuantumObject[]) where {T<:QuantumObject}
+function addFermionDissipator(M::AbstractHEOMLSMatrix, jumpOP::Vector{T} = QuantumObject[]) where {T <: QuantumObject}
     if length(jumpOP) > 0
         L_data = mapreduce(J -> _fermion_lindblad_dissipator(J, M.parity), +, jumpOP)
         L = QuantumObject(L_data, type = SuperOperator(), dims = M.dimensions)
@@ -363,7 +395,7 @@ Here, `δ` is the approximation discrepancy and `dirac(t)` denotes the Dirac-del
 # Return 
 - `M_new::AbstractHEOMLSMatrix` : the new HEOM Liouvillian superoperator matrix
 """
-function addTerminator(M::Mtype, Bath::Union{BosonBath,FermionBath}) where {Mtype<:AbstractHEOMLSMatrix}
+function addTerminator(M::Mtype, Bath::Union{BosonBath, FermionBath}) where {Mtype <: AbstractHEOMLSMatrix}
     Btype = typeof(Bath)
     if (Btype == BosonBath) && (Mtype <: M_Fermion)
         error("For $(Btype), the type of HEOMLS matrix should be either M_Boson or M_Boson_Fermion.")
@@ -387,7 +419,7 @@ function addTerminator(M::Mtype, Bath::Union{BosonBath,FermionBath}) where {Mtyp
 end
 
 raw"""
-A sparse COO representation of the positions and prefix values for a single superoperator in HEOM Liouville space.
+A sparse COO representation of the hierarchy (ADO) connectivity patterns and corresponding prefix values for a specific superoperator. The `data` field stores the corresponding superoperator matrix.
 """
 struct COOFormat
     I::Vector{Int}
@@ -414,14 +446,14 @@ raw"""
 Stores the sparsity structure (positions and prefix values) of all superoperators in HEOM Liouville space using COO format.
 """
 Base.@kwdef struct HEOMSparseStructure{
-    Tspre<:Union{COOFormat,Nothing},
-    Tspost<:Union{COOFormat,Nothing},
-    TspreD<:Union{COOFormat,Nothing},
-    TspostD<:Union{COOFormat,Nothing},
-    TComm<:Union{COOFormat,Nothing},
-    TanComm<:Union{COOFormat,Nothing},
-    TCommD<:Union{COOFormat,Nothing},
-}
+        Tspre <: Union{COOFormat, Nothing},
+        Tspost <: Union{COOFormat, Nothing},
+        TspreD <: Union{COOFormat, Nothing},
+        TspostD <: Union{COOFormat, Nothing},
+        TComm <: Union{COOFormat, Nothing},
+        TanComm <: Union{COOFormat, Nothing},
+        TCommD <: Union{COOFormat, Nothing},
+    }
     spre::Tspre = nothing
     spost::Tspost = nothing
     spreD::TspreD = nothing
@@ -463,11 +495,11 @@ HEOMSparseStructure(bath::bosonOutputLeft, Nado::Int) = HEOMSparseStructure(spre
 HEOMSparseStructure(bath::bosonOutputRight, Nado::Int) = HEOMSparseStructure(spost = COOFormat(Nado, bath.spost))
 
 # sum γ of bath for current level
-function bath_sum_γ(nvec, baths::Vector{T}) where {T<:Union{AbstractBosonBath,AbstractFermionBath}}
+function bath_sum_γ(nvec, baths::Vector{T}) where {T <: Union{AbstractBosonBath, AbstractFermionBath}}
     p = 0
     sum_γ = 0.0
     for b in baths
-        n = nvec[(p+1):(p+b.Nterm)]
+        n = nvec[(p + 1):(p + b.Nterm)]
         for k in findall(nk -> nk > 0, n)
             sum_γ += n[k] * b.γ[k]
         end
@@ -526,15 +558,15 @@ minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonOutpu
 
 # connect to fermionic (n-1)th-level for "absorption operator"
 function minus_i_C_op!(
-    ops_pattern::HEOMSparseStructure,
-    I::Int,
-    J::Int,
-    bath::fermionAbsorb,
-    k,
-    n_exc,
-    n_exc_before,
-    parity,
-)
+        ops_pattern::HEOMSparseStructure,
+        I::Int,
+        J::Int,
+        bath::fermionAbsorb,
+        k,
+        n_exc,
+        n_exc_before,
+        parity,
+    )
     prefix = -1.0im * ((-1)^n_exc_before)
     push!(ops_pattern.spre, I, J, prefix * ((-1)^value(parity)) * bath.η[k])
     push!(ops_pattern.spost, I, J, - prefix * (-1)^(n_exc - 1) * conj(bath.η_emit[k]))
@@ -543,15 +575,15 @@ end
 
 # connect to fermionic (n-1)th-level for "emission operator"
 function minus_i_C_op!(
-    ops_pattern::HEOMSparseStructure,
-    I::Int,
-    J::Int,
-    bath::fermionEmit,
-    k,
-    n_exc,
-    n_exc_before,
-    parity,
-)
+        ops_pattern::HEOMSparseStructure,
+        I::Int,
+        J::Int,
+        bath::fermionEmit,
+        k,
+        n_exc,
+        n_exc_before,
+        parity,
+    )
     prefix = -1.0im * ((-1)^n_exc_before)
     push!(ops_pattern.spre, I, J, prefix * ((-1)^value(parity)) * bath.η[k])
     push!(ops_pattern.spost, I, J, - prefix * (-1)^(n_exc - 1) * conj(bath.η_absorb[k]))
@@ -560,22 +592,22 @@ end
 
 # connect to bosonic (n+1)th-level for real-and-imaginary-type bosonic bath
 function minus_i_B_op!(
-    ops_pattern::HEOMSparseStructure,
-    I::Int,
-    J::Int,
-    bath::T,
-) where {T<:Union{bosonReal,bosonImag,bosonRealImag}}
+        ops_pattern::HEOMSparseStructure,
+        I::Int,
+        J::Int,
+        bath::T,
+    ) where {T <: Union{bosonReal, bosonImag, bosonRealImag}}
     push!(ops_pattern.Comm, I, J, -1.0im)
     return nothing
 end
 
 # connect to bosonic (n+1)th-level for absorption-and-emission-type bosonic bath
 function minus_i_B_op!(
-    ops_pattern::HEOMSparseStructure,
-    I::Int,
-    J::Int,
-    bath::T,
-) where {T<:Union{bosonAbsorb,bosonEmit}}
+        ops_pattern::HEOMSparseStructure,
+        I::Int,
+        J::Int,
+        bath::T,
+    ) where {T <: Union{bosonAbsorb, bosonEmit}}
     push!(ops_pattern.CommD, I, J, -1.0im)
     return nothing
 end
@@ -585,14 +617,14 @@ minus_i_B_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::AbstractBo
 
 # connect to fermionic (n+1)th-level
 function minus_i_A_op!(
-    ops_pattern::HEOMSparseStructure,
-    I::Int,
-    J::Int,
-    bath::AbstractFermionBath,
-    n_exc,
-    n_exc_before,
-    parity,
-)
+        ops_pattern::HEOMSparseStructure,
+        I::Int,
+        J::Int,
+        bath::AbstractFermionBath,
+        n_exc,
+        n_exc_before,
+        parity,
+    )
     prefix = -1.0im * ((-1)^n_exc_before)
     push!(ops_pattern.spreD, I, J, prefix * ((-1)^value(parity)))
     push!(ops_pattern.spostD, I, J, prefix * (-1)^(n_exc + 1))
@@ -601,8 +633,12 @@ end
 
 function combine_HEOMLS_terms(op::AddedOperator)
     Tensor_ops = op.ops |> collect # [ A_i ⊗ B_i ]
+    Id_terms = popfirst!(Tensor_ops)  # von Neumann term
+    Id_terms += popfirst!(Tensor_ops) # sum γ term
+
     A_list = Vector{AbstractMatrix}(undef, length(Tensor_ops))
     B_list = Vector{AbstractMatrix}(undef, length(Tensor_ops))
+
     for (idx, t_op) in pairs(Tensor_ops)
         t_op isa TensorProductOperator || throw(ArgumentError("The HEOMLS term should be a TensorProductOperator."))
         A_list[idx] = t_op.ops[1].A
@@ -619,7 +655,7 @@ function combine_HEOMLS_terms(op::AddedOperator)
         end
     end
 
-    return sum(pairs(unique_B_ops)) do (j, Bj)
+    return Id_terms + sum(pairs(unique_B_ops)) do (j, Bj)
         Aj = sum(k -> A_list[k], index_groups[j])
         return TensorProductOperator(Aj, Bj)
     end
@@ -658,7 +694,7 @@ assemble_HEOMLS_terms(M::AbstractSciMLOperator, method::Val, verbose::Bool) =
 
 check_assemble_method(assemble_method) =
     (assemble_method ∉ (Val(:full), Val(:combine), Val(:none))) && throw(
-        ArgumentError(
-            "Invalid value for `assemble`: $(assemble_method). Accepted values are `:full`, `:combine`, or `:none`.",
-        ),
-    )
+    ArgumentError(
+        "Invalid value for `assemble`: $(assemble_method). Accepted values are `:full`, `:combine`, or `:none`.",
+    ),
+)

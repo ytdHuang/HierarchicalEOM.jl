@@ -196,7 +196,7 @@ Base.iterate(B::AbstractBath, state::Int = 1) = state > length(B) ? nothing : (B
 
 function _check_gamma_absorb_and_emit(γ_absorb, γ_emit)
     len = length(γ_absorb)
-    if length(γ_emit) == len
+    return if length(γ_emit) == len
         for k in 1:len
             if !(γ_absorb[k] ≈ conj(γ_emit[k]))
                 @warn "The elements in \'γ_absorb\' should be complex conjugate of the corresponding elements in \'γ_emit\'."
