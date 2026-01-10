@@ -156,7 +156,7 @@
         end
     end
 
-    @testset "IO-HEOM" begin
+    CUDA.@time @testset "Input-Output HEOM" begin
         tier = 12
         Δ = 2 * π
         Γ = 0.1 * Δ
@@ -178,7 +178,7 @@
         a = qeye(2) ⊗ destroy(tier)
         H = Hsys ⊗ qeye(tier) + λ * tensor(X, qeye(tier)) * (a + a') + ω0 * a' * a
         tlist = LinRange(0, 20 / Δ, 100)
-        sol_me = mesolve(H, ρ0 ⊗ ket2dm(basis(tier, 1)), tlist, [sqrt(Γ * 2) * a], e_ops = [a' * a])
+        sol_me = mesolve(H, ρ0 ⊗ ket2dm(basis(tier, 1)), tlist, [sqrt(Γ * 2) * a]; e_ops = [a' * a], progress_bar = Val(false))
 
         # dynamical field
         input1(p, t) = λ * exp(-1.0im * ω0 * t - Γ * t)
@@ -196,7 +196,7 @@
         baths = [bath, bath_output_1R, bath_output_2L, bath_input1, bath_input2]
 
         M_full_cpu = M_Boson(Hsys, tier, baths; assemble = Val(:full), verbose = false)
-        M_lazy_cpu = M_Boson(Hsys, tier, baths; assemble = Val(:combine), verbose = false) 
+        M_lazy_cpu = M_Boson(Hsys, tier, baths; assemble = Val(:combine), verbose = false)
         M_full_gpu = cu(M_full_cpu)
         M_lazy_gpu = cu(M_lazy_cpu)
         HDict = M_full_cpu.hierarchy
@@ -213,7 +213,7 @@
         for tout in tlist
             (tout == 0) && continue
             p = (tout = tout,)
-            
+
             # assemble = Val(:full)
             sol_heom_full = HEOMsolve(M_full_gpu, ρ0, [0, tout], params = p, e_ops = e_ops, progress_bar = Val(false))
             exp_vals_full = sol_heom_full.expect[:, end]
