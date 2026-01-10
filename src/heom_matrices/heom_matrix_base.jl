@@ -435,7 +435,6 @@ function Base.push!(mat::COOFormat, i, j, v)
     push!(mat.I, i)
     push!(mat.J, j)
     push!(mat.V, v)
-
     return nothing
 end
 
@@ -488,6 +487,12 @@ HEOMSparseStructure(bath::bosonImag, Nado::Int) =
 HEOMSparseStructure(bath::bosonReal, Nado::Int) = HEOMSparseStructure(Comm = COOFormat(Nado, bath.Comm))
 HEOMSparseStructure(bath::bosonRealImag, Nado::Int) =
     HEOMSparseStructure(Comm = COOFormat(Nado, bath.Comm), anComm = COOFormat(Nado, bath.anComm))
+HEOMSparseStructure(bath::bosonInputFunction, Nado::Int) = HEOMSparseStructure(Comm = COOFormat(Nado, bath.Comm))
+HEOMSparseStructure(bath::bosonOutputFunctionLeft, Nado::Int) = HEOMSparseStructure(spre = COOFormat(Nado, bath.spre))
+HEOMSparseStructure(bath::bosonOutputFunctionRight, Nado::Int) =
+    HEOMSparseStructure(spost = COOFormat(Nado, bath.spost))
+HEOMSparseStructure(bath::bosonOutputLeft, Nado::Int) = HEOMSparseStructure(spre = COOFormat(Nado, bath.spre))
+HEOMSparseStructure(bath::bosonOutputRight, Nado::Int) = HEOMSparseStructure(spost = COOFormat(Nado, bath.spost))
 
 # sum γ of bath for current level
 function bath_sum_γ(nvec, baths::Vector{T}) where {T <: Union{AbstractBosonBath, AbstractFermionBath}}
@@ -538,6 +543,18 @@ function minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::b
     push!(ops_pattern.spost, I, J, 1.0im * n_k * conj(bath.η_absorb[k]))
     return nothing
 end
+
+# connect to bosonic (n-1)th-level dynamical field
+minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonInputFunction, k, n_k) =
+    push!(ops_pattern.Comm, I, J, n_k) # omit η[k] here, the ScalarOperator will be multiplied at the end
+minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonOutputFunctionLeft, k, n_k) =
+    push!(ops_pattern.spre, I, J, n_k) # omit η[k] here, the ScalarOperator will be multiplied at the end
+minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonOutputFunctionRight, k, n_k) =
+    push!(ops_pattern.spost, I, J, -n_k) # omit η[k] here, the ScalarOperator will be multiplied at the end
+minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonOutputLeft, k, n_k) =
+    push!(ops_pattern.spre, I, J, n_k * bath.η[k])
+minus_i_D_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::bosonOutputRight, k, n_k) =
+    push!(ops_pattern.spost, I, J, -n_k * bath.η[k])
 
 # connect to fermionic (n-1)th-level for "absorption operator"
 function minus_i_C_op!(
@@ -594,6 +611,9 @@ function minus_i_B_op!(
     push!(ops_pattern.CommD, I, J, -1.0im)
     return nothing
 end
+
+# connect to bosonic (n+1)th-level dynamical field
+minus_i_B_op!(ops_pattern::HEOMSparseStructure, I::Int, J::Int, bath::AbstractBosonDynamicalField) = nothing
 
 # connect to fermionic (n+1)th-level
 function minus_i_A_op!(

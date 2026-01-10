@@ -16,7 +16,7 @@ import CUDA.CUSPARSE: CuSparseVector, CuSparseMatrixCSC, CuSparseMatrixCSR, Abst
 import SparseArrays: AbstractSparseMatrix, sparse, SparseVector, SparseMatrixCSC
 import LinearAlgebra: Diagonal
 import SciMLOperators:
-    MatrixOperator, ScaledOperator, AddedOperator, IdentityOperator, TensorProductOperator, AbstractSciMLOperator
+    ScalarOperator, MatrixOperator, ScaledOperator, AddedOperator, IdentityOperator, TensorProductOperator, AbstractSciMLOperator
 
 @doc raw"""
     cu(M::AbstractHEOMLSMatrix; word_size::Union{Val,Int} = Val(64))
@@ -67,8 +67,10 @@ CuSparseMatrixCSR{T}(M::HEOMSuperOp) where {T} =
 _convert_to_gpu_matrix(A::AbstractSparseMatrix, MType::Type{T}) where {T <: AbstractCuSparseMatrix} = MType(A)
 _convert_to_gpu_matrix(A::AbstractMatrix, MType::Type{T}) where {T <: AbstractCuSparseMatrix} = MType(sparse(A))
 
+_convert_to_gpu_matrix(A::ScalarOperator, MType) = ScalarOperator(eltype(MType)(A.val), A.update_func)
 _convert_to_gpu_matrix(A::MatrixOperator, MType) = MatrixOperator(_convert_to_gpu_matrix(A.A, MType))
-_convert_to_gpu_matrix(A::ScaledOperator, MType) = ScaledOperator(A.λ, _convert_to_gpu_matrix(A.L, MType))
+_convert_to_gpu_matrix(A::ScaledOperator, MType) =
+    ScaledOperator(_convert_to_gpu_matrix(A.λ, MType), _convert_to_gpu_matrix(A.L, MType))
 _convert_to_gpu_matrix(A::AddedOperator, MType) = AddedOperator(map(op -> _convert_to_gpu_matrix(op, MType), A.ops))
 _convert_to_gpu_matrix(A::IdentityOperator, MType) = A
 _convert_to_gpu_matrix(A::TensorProductOperator, MType) =
