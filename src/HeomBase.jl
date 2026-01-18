@@ -47,11 +47,13 @@ _get_SciML_matrix_wrapper(M::TensorProductOperator) = _get_SciML_matrix_wrapper(
 _get_SciML_matrix_wrapper(M::AbstractHEOMLSMatrix) = _get_SciML_matrix_wrapper(M.data)
 
 # equal to : sparse(vec(system_identity_matrix))
-function _Tr(T::Type{<:Number}, dimensions::Dimensions, N::Int)
+function _Tr(T::Type{<:Number}, dimensions::Dimensions, N::Int, idx::Int = 1)
     D = prod(dimensions)
-    return SparseVector(N * D^2, [1 + n * (D + 1) for n in 0:(D - 1)], ones(T, D))
+    D2 = D^2
+    idx_start = 1 + D2 * (idx - 1)
+    return SparseVector(N * D2, [idx_start + n * (D + 1) for n in 0:(D - 1)], ones(T, D))
 end
-_Tr(M::AbstractHEOMLSMatrix) = _Tr(eltype(M), M.dimensions, M.N)
+_Tr(M::AbstractHEOMLSMatrix, idx::Int = 1) = _Tr(eltype(M), M.dimensions, M.N, idx)
 
 function HandleMatrixType(
         M::AbstractQuantumObject,

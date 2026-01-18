@@ -87,7 +87,20 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     minus_γ_term = zeros(ComplexF64, Nado)
 
     # stores position and prefix value for each Boson superoperators in HEOM Liouville space using sparse COO format
-    B_terms = [HEOMSparseStructure(bB, Nado) for bB in baths]
+    B_terms = HEOMSparseStructure[]
+    B_td_terms = Dict{ScalarOperator, HEOMSparseStructure}()
+    for bB in baths
+        if bB isa AbstractBosonFunctionField
+            # Here, we create an empty dummy structure for `B_terms` to keep the HEOM structure alignment
+            # the time-dependent B_td_terms will be handled separately
+            push!(B_terms, HEOMSparseStructure())
+            for λ in bB.η
+                B_td_terms[λ] = HEOMSparseStructure(bB, Nado)
+            end
+        else
+            push!(B_terms, HEOMSparseStructure(bB, Nado))
+        end
+    end
 
     if verbose
         println("Preparing HEOM Liouvillian sparsity structure...")
@@ -112,9 +125,16 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                 # connect to bosonic (n-1)th-level superoperator
                 if n_k > 0
                     Nvec_minus!(nvec_neigh, mode)
-                    if (threshold == 0.0) || haskey(nvec2idx, nvec_neigh)
+                    if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
-                        minus_i_D_op!(b_term, idx, idx_neigh, bB, k, n_k)
+
+                        if bB isa AbstractBosonFunctionField
+                            # find the time-dependent term in the dictionary corresponds to the ScalarOperator λ
+                            λ = bB.η[k]
+                            minus_i_D_op!(B_td_terms[λ], idx, idx_neigh, bB, k, n_k)
+                        else
+                            minus_i_D_op!(b_term, idx, idx_neigh, bB, k, n_k)
+                        end
                     end
                     Nvec_plus!(nvec_neigh, mode)
                 end
@@ -122,7 +142,7 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
                 # connect to bosonic (n+1)th-level superoperator
                 if nvec.level < tier
                     Nvec_plus!(nvec_neigh, mode)
-                    if (threshold == 0.0) || haskey(nvec2idx, nvec_neigh)
+                    if haskey(nvec2idx, nvec_neigh)
                         idx_neigh = nvec2idx[nvec_neigh]
                         minus_i_B_op!(b_term, idx, idx_neigh, bB)
                     end
@@ -145,12 +165,29 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
             b_coo isa Nothing || (L_t_indep += _gen_HEOMLS_term(b_coo))
         end
     end
+
+    L_terms = AbstractSciMLOperator[L_t_indep]
+
+    # Input/Output HEOMLS (time-dependent) terms
+    td_scalars = keys(B_td_terms)
+    for λ in td_scalars
+        b_term = B_td_terms[λ]
+        for op in HEOMSparseStructureFieldNames
+            b_coo = getfield(b_term, op)
+            b_coo isa Nothing || push!(L_terms, _gen_HEOMLS_term(b_coo))
+        end
+    end
+
     if verbose
         println("[DONE]")
         flush(stdout)
     end
 
-    L_heom = assemble_HEOMLS_terms(L_t_indep, assemble_method, verbose)[1]
+    L_terms = assemble_HEOMLS_terms(L_terms, assemble_method, verbose)
+    L_heom = popfirst!(L_terms)
+    if !isempty(td_scalars)
+        L_heom += sum(td_scalars .* L_terms)
+    end
     return M_Boson(L_heom, tier, _Hsys.dimensions, Nado, sup_dim, parity, Bath, hierarchy)
 end
 
