@@ -58,6 +58,7 @@ import SciMLOperators:
     SciMLOperators,
     AbstractSciMLOperator,
     ScalarOperator,
+    DiagonalOperator,
     MatrixOperator,
     ScaledOperator,
     IdentityOperator,
