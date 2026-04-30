@@ -7,7 +7,7 @@ HEOM Liouvillian superoperator matrix for bosonic bath
 # Fields
 - `data<:AbstractSciMLOperator` : the matrix of HEOM Liouvillian superoperator
 - `tier` : the tier (cutoff level) for the bosonic hierarchy
-- `dimensions` : the dimension list of the coupling operator (should be equal to the system dimensions).
+- `dimensions` : the `Dimensions` structure of the [`ADOsSpace`](@ref).
 - `N` : the number of total ADOs
 - `sup_dim` : the dimension of system superoperator
 - `parity` : the parity label of the operator which HEOMLS is acting on (usually `EVEN`, only set as `ODD` for calculating spectrum of fermionic system).
@@ -66,7 +66,9 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
         assemble::Union{Val, Symbol} = Val(:full),
         verbose::Bool = true,
     )
-    _Hsys = HandleMatrixType(Hsys, "Hsys (system Hamiltonian or Liouvillian)") # Checking input type first
+    # Checking input type first
+    _Hsys = HandleMatrixType(Hsys, "Hsys (system Hamiltonian or Liouvillian)")
+    issparse(_Hsys.data) || (@warn "The system Hamiltonian or Liouvillian is recommended to be a sparse matrix for better performance.")
 
     assemble_method = makeVal(assemble)
     check_assemble_method(assemble_method)
@@ -154,7 +156,7 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     end
 
     # Create SciML lazy HEOM Liouvillian superoperator
-    sup_dim = prod(_Hsys.dimensions)^2
+    sup_dim = get_size(_Hsys.dimensions)[1]^2
     L_t_indep = TensorProductOperator(IdentityOperator(Nado), minus_i_L_op(_Hsys)) # the Liouvillian operator for free Hamiltonian term
     L_t_indep += TensorProductOperator(DiagonalOperator(minus_γ_term), IdentityOperator(sup_dim)) # minus sum γ terms
 
@@ -188,7 +190,9 @@ Note that the parity only need to be set as `ODD` when the system contains fermi
     if !isempty(td_scalars)
         L_heom += sum(td_scalars .* L_terms)
     end
-    return M_Boson(L_heom, tier, _Hsys.dimensions, Nado, sup_dim, parity, Bath, hierarchy)
+
+    ados_space = ADOsSpace(Nado, LiouvilleSpace(_Hsys.dimensions))
+    return M_Boson(L_heom, tier, Dimensions(ados_space, ados_space), Nado, sup_dim, parity, Bath, hierarchy)
 end
 
 _getBtier(M::M_Boson) = M.tier
