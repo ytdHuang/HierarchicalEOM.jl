@@ -17,7 +17,7 @@ import CUDA.CUSPARSE: CuSparseVector, CuSparseMatrixCSC, CuSparseMatrixCSR
 import SparseArrays: AbstractSparseMatrix, sparse, SparseVector, SparseMatrixCSC
 import LinearAlgebra: Diagonal
 import SciMLOperators:
-    MatrixOperator, ScaledOperator, AddedOperator, IdentityOperator, TensorProductOperator, AbstractSciMLOperator, DiagonalOperator
+    ScalarOperator, MatrixOperator, ScaledOperator, AddedOperator, IdentityOperator, TensorProductOperator, AbstractSciMLOperator, DiagonalOperator
 
 # the supported CUDA sparse matrix types for GPU calculations
 # TODO: make GPUArraysExt to use `GPUArrays.AbstractGPUSparseArray`
@@ -73,8 +73,10 @@ _convert_to_gpu_matrix(A::AbstractSparseMatrix, MType::Type{<:_CuSparseType}) = 
 _convert_to_gpu_matrix(A::AbstractMatrix, MType::Type{<:_CuSparseType}) = MType(sparse(A))
 _convert_to_gpu_matrix(A::Diagonal{Etype}, ::Type{<:_CuSparseType}) where {Etype <: Number} = Diagonal(CuArray{Etype, 1}(A.diag))
 
+_convert_to_gpu_matrix(A::ScalarOperator, MType) = ScalarOperator(eltype(MType)(A.val), A.update_func)
 _convert_to_gpu_matrix(A::MatrixOperator, MType) = MatrixOperator(_convert_to_gpu_matrix(A.A, MType))
-_convert_to_gpu_matrix(A::ScaledOperator, MType) = ScaledOperator(A.λ, _convert_to_gpu_matrix(A.L, MType))
+_convert_to_gpu_matrix(A::ScaledOperator, MType) =
+    ScaledOperator(_convert_to_gpu_matrix(A.λ, MType), _convert_to_gpu_matrix(A.L, MType))
 _convert_to_gpu_matrix(A::AddedOperator, MType) = AddedOperator(map(op -> _convert_to_gpu_matrix(op, MType), A.ops))
 _convert_to_gpu_matrix(A::IdentityOperator, MType) = A
 _convert_to_gpu_matrix(A::TensorProductOperator, MType) =

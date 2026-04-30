@@ -58,6 +58,7 @@ import SciMLBase:
 import SciMLOperators:
     SciMLOperators,
     AbstractSciMLOperator,
+    ScalarOperator,
     DiagonalOperator,
     MatrixOperator,
     ScaledOperator,
@@ -83,6 +84,7 @@ include("HeomBase.jl")
 include("bath/BathBase.jl")
 include("bath/BosonBath.jl")
 include("bath/FermionBath.jl")
+include("bath/BosonDynamicalField.jl")
 include("bath_correlation_functions/bath_correlation_func.jl")
 
 # Parity and ADOs
