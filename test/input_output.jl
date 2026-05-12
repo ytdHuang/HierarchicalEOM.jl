@@ -117,9 +117,9 @@
     iter = tlist[2:end]
     prob_heom_out_fn =
         HEOMsolveProblem(M_out_fn, ρ0, [0, iter[1]], params = (tout = iter[1],), progress_bar = Val(false))
-    function _map_prob_func(prob, i, repeat, iter)
+    function _map_prob_func(prob, ctx, iter)
         f = deepcopy(prob.f.f)
-        tout = iter[i]
+        tout = iter[ctx.sim_id]
 
         tr_e_ops = _generate_Eops(M_out_fn, e_ops_out_fn)
         expvals = Array{ComplexF64}(undef, length(e_ops_out_fn), 1)
@@ -131,7 +131,7 @@
     sol_heom_out_fn = HEOMsolve_map(
         prob_heom_out_fn,
         iter;
-        prob_func = (prob, i, repeat) -> _map_prob_func(prob, i, repeat, iter),
+        prob_func = (prob, ctx) -> _map_prob_func(prob, ctx, iter),
         progress_bar = Val(true), # also test the progress_bar
     )
 
