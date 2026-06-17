@@ -52,11 +52,13 @@ _get_SciML_matrix_wrapper(M::AbstractHEOMLSMatrix) = _get_SciML_matrix_wrapper(M
 
 # equal to : sparse(vec(system_identity_matrix))
 # The dimensions must be Dimensions{<:ADOsSpace}
-function _Tr(T::Type{<:Number}, dimensions::Dimensions, N::Int)
+function _Tr(T::Type{<:Number}, dimensions::Dimensions, N::Int, idx::Int = 1)
     D = get_sys_size(dimensions.to)[1]
-    return SparseVector(N * D^2, [1 + n * (D + 1) for n in 0:(D - 1)], ones(T, D))
+    D2 = D^2
+    idx_start = 1 + D2 * (idx - 1)
+    return SparseVector(N * D2, [idx_start + n * (D + 1) for n in 0:(D - 1)], ones(T, D))
 end
-_Tr(M::AbstractHEOMLSMatrix) = _Tr(eltype(M), M.dimensions, M.N)
+_Tr(M::AbstractHEOMLSMatrix, idx::Int = 1) = _Tr(eltype(M), M.dimensions, M.N, idx)
 
 function HandleMatrixType(
         M::AbstractQuantumObject,
