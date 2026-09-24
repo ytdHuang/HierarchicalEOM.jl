@@ -1,4 +1,7 @@
-@testitem "Input-Output" begin
+using Test
+using HierarchicalEOM
+
+@testset "Input-Output" begin
     tier = 12
     Δ = 2 * π
     Γ = 0.1 * Δ
