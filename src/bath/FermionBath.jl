@@ -3,8 +3,7 @@ export AbstractFermionBath, fermionAbsorb, fermionEmit
 
 abstract type AbstractFermionBath end
 
-Base.show(io::IO, B::AbstractFermionBath) =
-    print(io, "$(typeof(B))-type bath with $(B.Nterm) exponential-expansion terms\n")
+Base.show(io::IO, B::AbstractFermionBath) = print(io, "$(typeof(B))-type bath with $(B.Nterm) terms\n")
 Base.show(io::IO, m::MIME"text/plain", B::AbstractFermionBath) = show(io, B)
 
 function _check_fermionic_coupling_operator(op)
