@@ -156,3 +156,12 @@ function Base.getproperty(b::BType, key::Symbol) where {BType <: AbstractBosonDy
         return getfield(b, key)
     end
 end
+
+# used by `Base.getindex(B::AbstractBath, ...)` to build the `DynamicalField`
+_bath_term_types(b::bosonInputFunction) = "bInFn"
+_bath_term_types(b::bosonOutputLeft) = "bOutL"
+_bath_term_types(b::bosonOutputRight) = "bOutR"
+_bath_term_types(b::bosonOutputFunctionLeft) = "bOutFnL"
+_bath_term_types(b::bosonOutputFunctionRight) = "bOutFnR"
+
+_gen_bath_term(B::AbstractBath, b::AbstractBosonDynamicalField, k::Int) = DynamicalField(B.op, b.η[k], b.γ[k], _bath_term_types(b))

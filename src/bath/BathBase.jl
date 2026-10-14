@@ -73,56 +73,15 @@ Base.checkbounds(B::AbstractBath, i::Int) =
 Base.length(B::AbstractBath) = B.Nterm
 Base.lastindex(B::AbstractBath) = B.Nterm
 
+# used by `Base.getindex(B::AbstractBath, ...)`
+_gen_bath_term(B::AbstractBath, b, k::Int) = Exponent(_bath_term_op(B, b), _bath_term_eta(b, k), b.γ[k], _bath_term_types(b))
+
 function Base.getindex(B::AbstractBath, i::Int)
     checkbounds(B, i)
-
     count = 0
     for b in B.bath
         if i <= (count + b.Nterm)
-            k = i - count
-            b_type = typeof(b)
-            if b_type <: AbstractBosonDynamicalField
-                if b_type == bosonInputFunction
-                    types = "bInFn"
-                elseif b_type == bosonOutputFunctionLeft
-                    types = "bOutFnL"
-                elseif b_type == bosonOutputFunctionRight
-                    types = "bOutFnR"
-                elseif b_type == bosonOutputLeft
-                    types = "bOutL"
-                elseif b_type == bosonOutputRight
-                    types = "bOutR"
-                end
-                return DynamicalField(B.op, b.η[k], b.γ[k], types)
-            else
-                if b_type == bosonRealImag
-                    η = b.η_real[k] + 1.0im * b.η_imag[k]
-                    types = "bRI"
-                    op = B.op
-                else
-                    η = b.η[k]
-                    if b_type == bosonReal
-                        types = "bR"
-                        op = B.op
-                    elseif b_type == bosonImag
-                        types = "bI"
-                        op = B.op
-                    elseif b_type == bosonAbsorb
-                        types = "bA"
-                        op = B.op'
-                    elseif b_type == bosonEmit
-                        types = "bE"
-                        op = B.op
-                    elseif b_type == fermionAbsorb
-                        types = "fA"
-                        op = B.op'
-                    elseif b_type == fermionEmit
-                        types = "fE"
-                        op = B.op
-                    end
-                end
-                return Exponent(op, η, b.γ[k], types)
-            end
+            return _gen_bath_term(B, b, i - count)
         else
             count += b.Nterm
         end
@@ -133,56 +92,13 @@ end
 function Base.getindex(B::AbstractBath, r::UnitRange{Int})
     checkbounds(B, r[1])
     checkbounds(B, r[end])
-
     count = 0
     list = BathTerm[]
     for b in B.bath
         for k in 1:b.Nterm
             count += 1
             if (r[1] <= count) && (count <= r[end])
-                b_type = typeof(b)
-                if b_type <: AbstractBosonDynamicalField
-                    if b_type == bosonInputFunction
-                        types = "bInFn"
-                    elseif b_type == bosonOutputFunctionLeft
-                        types = "bOutFnL"
-                    elseif b_type == bosonOutputFunctionRight
-                        types = "bOutFnR"
-                    elseif b_type == bosonOutputLeft
-                        types = "bOutL"
-                    elseif b_type == bosonOutputRight
-                        types = "bOutR"
-                    end
-                    push!(list, DynamicalField(B.op, b.η[k], b.γ[k], types))
-                else
-                    if b_type == bosonRealImag
-                        η = b.η_real[k] + 1.0im * b.η_imag[k]
-                        types = "bRI"
-                        op = B.op
-                    else
-                        η = b.η[k]
-                        if b_type == bosonReal
-                            types = "bR"
-                            op = B.op
-                        elseif b_type == bosonImag
-                            types = "bI"
-                            op = B.op
-                        elseif b_type == bosonAbsorb
-                            types = "bA"
-                            op = B.op'
-                        elseif b_type == bosonEmit
-                            types = "bE"
-                            op = B.op
-                        elseif b_type == fermionAbsorb
-                            types = "fA"
-                            op = B.op'
-                        elseif b_type == fermionEmit
-                            types = "fE"
-                            op = B.op
-                        end
-                    end
-                    push!(list, Exponent(op, η, b.γ[k], types))
-                end
+                push!(list, _gen_bath_term(B, b, k))
             end
             if count == r[end]
                 return list
