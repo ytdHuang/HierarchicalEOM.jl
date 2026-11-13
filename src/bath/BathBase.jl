@@ -1,5 +1,5 @@
 export AbstractBath
-export BathTerm, Exponent
+export BathTerm, Exponent, DynamicalField
 export correlation_function
 
 abstract type AbstractBath end
@@ -36,6 +36,34 @@ end
 Base.show(io::IO, E::Exponent) = print(io, "Bath Exponent with types = \"$(E.types)\", η = $(E.η), γ = $(E.γ).\n")
 Base.show(io::IO, m::MIME"text/plain", E::Exponent) = show(io, E)
 
+@doc raw"""
+    struct DynamicalField <: BathTerm
+An object which describes a single dynamical field term, which is a correlation function between the system-bath coupling operator and a desired bath operator.
+
+# Fields
+- `op::QuantumObject` : The system coupling operator according to system-bath interaction.
+- `η::Union{Number,Function}` : the coefficient ``\eta_i``. If `η(p, t)` is a `Function`, it must depends on the parameters `p` and time `t`
+- `γ::Number` : the coefficient ``\gamma_i``.
+- `types::String` : The type-tag of the dynamical field.
+
+The different types of the DynamicalField:
+- `\"bInFn\"`
+- `\"bOutFnL\"`
+- `\"bOutFnR\"`
+- `\"bOutL\"`
+- `\"bOutR\"`
+"""
+struct DynamicalField <: BathTerm
+    op::QuantumObject
+    η::Union{Number, ScalarOperator}
+    γ::Number
+    types::String
+end
+
+Base.show(io::IO, F::DynamicalField) =
+    print(io, "Dynamical Field with types = \"$(F.types)\", η = $(F.η), γ = $(F.γ).\n")
+Base.show(io::IO, m::MIME"text/plain", F::DynamicalField) = show(io, F)
+
 Base.show(io::IO, B::AbstractBath) = print(io, "$(typeof(B)) object with $(B.Nterm) terms.\n")
 Base.show(io::IO, m::MIME"text/plain", B::AbstractBath) = show(io, B)
 
@@ -45,20 +73,20 @@ Base.checkbounds(B::AbstractBath, i::Int) =
 Base.length(B::AbstractBath) = B.Nterm
 Base.lastindex(B::AbstractBath) = B.Nterm
 
-# used by `Base.getindex(B::AbstractBath, ...)` to build the `Exponent`
-_bath_exponent_term(B::AbstractBath, b, k::Int) = Exponent(_bath_term_op(B, b), _bath_term_eta(b, k), b.γ[k], _bath_term_types(b))
+# used by `Base.getindex(B::AbstractBath, ...)`
+_gen_bath_term(B::AbstractBath, b, k::Int) = Exponent(_bath_term_op(B, b), _bath_term_eta(b, k), b.γ[k], _bath_term_types(b))
 
 function Base.getindex(B::AbstractBath, i::Int)
     checkbounds(B, i)
     count = 0
     for b in B.bath
         if i <= (count + b.Nterm)
-            return _bath_exponent_term(B, b, i - count)
+            return _gen_bath_term(B, b, i - count)
         else
             count += b.Nterm
         end
     end
-    return
+    return nothing
 end
 
 function Base.getindex(B::AbstractBath, r::UnitRange{Int})
@@ -70,14 +98,14 @@ function Base.getindex(B::AbstractBath, r::UnitRange{Int})
         for k in 1:b.Nterm
             count += 1
             if (r[1] <= count) && (count <= r[end])
-                push!(list, _bath_exponent_term(B, b, k))
+                push!(list, _gen_bath_term(B, b, k))
             end
             if count == r[end]
                 return list
             end
         end
     end
-    return
+    return nothing
 end
 
 Base.getindex(B::AbstractBath, ::Colon) = getindex(B, 1:B.Nterm)
